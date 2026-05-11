@@ -70,7 +70,7 @@ def create_reference_layer(cmds, node: str, layer: str) -> str:
 
 
 def run_python_tool(dal, mode: str, reference_layer: str, output_layer: str, **kwargs) -> None:
-    result = dal.delta_animation_layer(
+    runner = dal.DeltaAnimationLayer(
         mode=mode,
         reference_layer=reference_layer,
         output_layer=output_layer,
@@ -80,6 +80,7 @@ def run_python_tool(dal, mode: str, reference_layer: str, output_layer: str, **k
         replace_output=True,
         **kwargs
     )
+    result = runner.execute()
     if result != output_layer:
         raise RuntimeError("Unexpected function result for {0}: {1!r}".format(mode, result))
 

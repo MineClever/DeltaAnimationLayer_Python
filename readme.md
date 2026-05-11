@@ -1,6 +1,6 @@
 # DeltaAnimationLayer Python
 
-Maya Python version of DeltaAnimationLayer. This is a plain Python tool, not a Maya plugin. Load or run the script in Maya, then call the Python function directly or open the PySide UI.
+Maya Python version of DeltaAnimationLayer. This is a plain Python tool, not a Maya plugin. Load or run the script in Maya, then create the core class directly or open the PySide UI.
 
 ## Requirements
 
@@ -22,7 +22,7 @@ import sys
 sys.path.append("./DeltaAnimationLayer_Python")
 import delta_anim_layer_pyside2 as dal
 
-dal.delta_animation_layer(
+runner = dal.DeltaAnimationLayer(
     mode="subtract",
     reference_layer="baseLayer",
     source_layer="",
@@ -32,6 +32,7 @@ dal.delta_animation_layer(
     time_step=1,
     replace_output=True,
 )
+runner.execute()
 ```
 
 To show the UI:
@@ -42,7 +43,13 @@ dal.show_delta_anim_layer_ui()
 
 ## Behavior
 
-The Python version follows the C++ and C# implementations:
+The Python version separates the core implementation and UI:
+
+- `DeltaAnimationLayer`: core implementation class.
+- `DeltaAnimLayerDialog`: PySide UI class that delegates to `DeltaAnimationLayer`.
+- Helper logic such as mode parsing, layer sampling, quaternion math, output key writing, and time range construction is encapsulated by `DeltaAnimationLayer`.
+
+The behavior follows the C++ and C# implementations:
 
 - `reference_layer` is required.
 - Input transform nodes are resolved from transform attributes registered on `reference_layer`.
@@ -59,4 +66,4 @@ Run from this directory:
 powershell -ExecutionPolicy Bypass -File .\ValidateRegression.ps1
 ```
 
-The validation script imports `delta_anim_layer_pyside2.py` directly in mayapy and calls `delta_animation_layer`; it does not use `loadPlugin`.
+The validation script imports `delta_anim_layer_pyside2.py` directly in mayapy and instantiates `DeltaAnimationLayer`; it does not use `loadPlugin`.
