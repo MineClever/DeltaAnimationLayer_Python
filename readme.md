@@ -19,7 +19,7 @@ In Maya Python:
 ```python
 import sys
 
-sys.path.append(r"D:\_Code_Here\Git\MayaTools\DeltaAnimationLayer\DeltaAnimationLayer_Python")
+sys.path.append("./DeltaAnimationLayer_Python")
 import delta_anim_layer_pyside2 as dal
 
 dal.delta_animation_layer(
