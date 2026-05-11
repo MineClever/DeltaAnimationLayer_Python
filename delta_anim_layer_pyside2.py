@@ -4,6 +4,8 @@
 # show_delta_anim_layer_ui()
 
 import math
+from typing import Any, Iterable, List, Optional, Sequence, Tuple
+
 import maya.cmds as cmds
 import maya.OpenMaya as om
 import maya.OpenMayaAnim as oma
@@ -45,27 +47,30 @@ class DeltaAnimationLayer(object):
         use_seconds=False,
         replace_output=False
     ):
-        self.mode = self.parse_mode(mode)
-        self.reference_layer = reference_layer
-        self.source_layer = source_layer
-        self.output_layer = output_layer
-        self.start_time = start_time
-        self.end_time = end_time
-        self.time_step = time_step
-        self.reference_time = reference_time
-        self.use_reference_pose = use_reference_pose
-        self.use_seconds = use_seconds
-        self.replace_output = replace_output
-        self.time_unit = None
-        self.times = []
-        self.paths = []
+        # type: (str, str, str, str, Optional[float], Optional[float], float, Optional[float], bool, bool, bool) -> None
+        self.mode = self.parse_mode(mode)  # type: str
+        self.reference_layer = reference_layer  # type: str
+        self.source_layer = source_layer  # type: str
+        self.output_layer = output_layer  # type: str
+        self.start_time = start_time  # type: Optional[float]
+        self.end_time = end_time  # type: Optional[float]
+        self.time_step = time_step  # type: float
+        self.reference_time = reference_time  # type: Optional[float]
+        self.use_reference_pose = use_reference_pose  # type: bool
+        self.use_seconds = use_seconds  # type: bool
+        self.replace_output = replace_output  # type: bool
+        self.time_unit = None  # type: Optional[int]
+        self.times = []  # type: List[float]
+        self.paths = []  # type: List[om.MDagPath]
 
     @staticmethod
     def is_empty_layer(layer_name):
+        # type: (str) -> bool
         return not layer_name or layer_name in ("None", "none")
 
     @staticmethod
     def parse_mode(mode):
+        # type: (str) -> str
         mode = (mode or "subtract").lower()
         if mode in ("delta", "subtract"):
             return "subtract"
@@ -79,10 +84,12 @@ class DeltaAnimationLayer(object):
 
     @staticmethod
     def spline_weight(t):
+        # type: (float) -> float
         return 3.0 * t * t - 2.0 * t * t * t
 
     @staticmethod
     def get_dag_path(node):
+        # type: (str) -> om.MDagPath
         selection = om.MSelectionList()
         selection.add(node)
         path = om.MDagPath()
@@ -91,6 +98,7 @@ class DeltaAnimationLayer(object):
 
     @staticmethod
     def get_depend_node(node_name):
+        # type: (str) -> om.MObject
         selection = om.MSelectionList()
         selection.add(node_name)
         obj = om.MObject()
@@ -99,16 +107,19 @@ class DeltaAnimationLayer(object):
 
     @staticmethod
     def find_plug(node_obj, attr_name):
+        # type: (om.MObject, str) -> om.MPlug
         node_fn = om.MFnDependencyNode(node_obj)
         return node_fn.findPlug(attr_name, True)
 
     @staticmethod
     def plug_node_name_and_attr(plug):
+        # type: (om.MPlug) -> Tuple[str, str, str]
         full_name = plug.name()
         node_name, attr_name = full_name.rsplit(".", 1)
         return node_name, attr_name, full_name
 
     def try_find_layer_curve(self, layer_name, plug):
+        # type: (str, om.MPlug) -> Optional[om.MObject]
         if self.is_empty_layer(layer_name) or plug.isNull():
             return None
 
@@ -134,6 +145,7 @@ class DeltaAnimationLayer(object):
         return None
 
     def sample_plug_or_layer_curve(self, layer_name, plug, time_value):
+        # type: (str, om.MPlug, float) -> float
         if plug.isNull():
             return 0.0
 
@@ -151,6 +163,7 @@ class DeltaAnimationLayer(object):
         return value
 
     def sample_transform(self, path, layer_name, time_value):
+        # type: (om.MDagPath, str, float) -> Tuple[om.MVector, om.MQuaternion]
         node_obj = path.node()
         plugs = [self.find_plug(node_obj, attr_name) for attr_name in self.TRANSFORM_ATTRS]
 
@@ -173,12 +186,14 @@ class DeltaAnimationLayer(object):
 
     @staticmethod
     def quaternion_inverse(q):
+        # type: (om.MQuaternion) -> om.MQuaternion
         inverse = om.MQuaternion(q.x, q.y, q.z, q.w)
         inverse.invertIt()
         return inverse
 
     @staticmethod
     def quaternion_slerp(q1, q2, weight):
+        # type: (om.MQuaternion, om.MQuaternion, float) -> om.MQuaternion
         try:
             return om.MQuaternion.slerp(q1, q2, weight)
         except Exception:
@@ -191,6 +206,7 @@ class DeltaAnimationLayer(object):
             return q
 
     def compute_subtract(self, source, reference):
+        # type: (Tuple[om.MVector, om.MQuaternion], Tuple[om.MVector, om.MQuaternion]) -> Tuple[om.MVector, om.MQuaternion]
         source_translation, source_rotation = source
         reference_translation, reference_rotation = reference
         return (
@@ -199,6 +215,7 @@ class DeltaAnimationLayer(object):
         )
 
     def compute_pre_subtract(self, source, reference):
+        # type: (Tuple[om.MVector, om.MQuaternion], Tuple[om.MVector, om.MQuaternion]) -> Tuple[om.MVector, om.MQuaternion]
         source_translation, source_rotation = source
         reference_translation, reference_rotation = reference
         return (
@@ -207,6 +224,7 @@ class DeltaAnimationLayer(object):
         )
 
     def ensure_animation_layer(self):
+        # type: () -> None
         if not self.output_layer:
             raise RuntimeError("Output layer name is empty.")
 
@@ -222,6 +240,7 @@ class DeltaAnimationLayer(object):
             pass
 
     def disable_source_layer_animation(self):
+        # type: () -> bool
         if self.is_empty_layer(self.source_layer):
             return False
 
@@ -239,12 +258,14 @@ class DeltaAnimationLayer(object):
         return True
 
     def format_time_arg(self, time_value):
+        # type: (float) -> str
         time_arg = str(time_value)
         if self.time_unit == om.MTime.kSeconds:
             time_arg += "sec"
         return time_arg
 
     def set_layer_key(self, plug, time_value, value):
+        # type: (om.MPlug, float, float) -> None
         node_name, attr_name, full_plug = self.plug_node_name_and_attr(plug)
 
         try:
@@ -264,6 +285,7 @@ class DeltaAnimationLayer(object):
         )
 
     def write_transform_sample(self, path, time_value, sample):
+        # type: (om.MDagPath, float, Tuple[om.MVector, om.MQuaternion]) -> None
         node_obj = path.node()
         plugs = [self.find_plug(node_obj, attr_name) for attr_name in self.TRANSFORM_ATTRS]
 
@@ -289,6 +311,7 @@ class DeltaAnimationLayer(object):
 
     @staticmethod
     def build_times(start, end, step):
+        # type: (float, float, float) -> List[float]
         if step <= 0.0:
             step = 1.0
         if end < start:
@@ -305,6 +328,7 @@ class DeltaAnimationLayer(object):
         return times
 
     def query_layer_attributes(self, layer_name):
+        # type: (str) -> List[str]
         if self.is_empty_layer(layer_name):
             return []
 
@@ -317,6 +341,7 @@ class DeltaAnimationLayer(object):
         return attributes
 
     def resolve_node_paths_from_layer_attributes(self, layer_names):
+        # type: (Iterable[str]) -> List[om.MDagPath]
         attributes = []
         for layer_name in layer_names:
             attributes.extend(self.query_layer_attributes(layer_name))
@@ -343,6 +368,7 @@ class DeltaAnimationLayer(object):
         return paths
 
     def resolve_node_paths_from_layers(self):
+        # type: () -> List[om.MDagPath]
         if self.is_empty_layer(self.reference_layer):
             raise RuntimeError("Reference Layer is required to resolve input transform nodes.")
 
@@ -358,6 +384,7 @@ class DeltaAnimationLayer(object):
         return paths
 
     def execute(self):
+        # type: () -> str
         self.prepare()
         self.disable_source_layer_animation()
         self.ensure_animation_layer()
@@ -373,6 +400,7 @@ class DeltaAnimationLayer(object):
         return self.output_layer
 
     def prepare(self):
+        # type: () -> None
         if not self.output_layer:
             raise RuntimeError("Output layer is required.")
 
@@ -393,6 +421,7 @@ class DeltaAnimationLayer(object):
         )
 
     def process_path(self, path):
+        # type: (om.MDagPath) -> None
         source_samples = [
             self.sample_transform(path, self.source_layer, time_value)
             for time_value in self.times
@@ -417,6 +446,7 @@ class DeltaAnimationLayer(object):
             self.write_transform_sample(path, time_value, output)
 
     def compute_output_sample(self, path, source_samples, reference_pose, sample_index, time_value):
+        # type: (om.MDagPath, Sequence[Tuple[om.MVector, om.MQuaternion]], Optional[Tuple[om.MVector, om.MQuaternion]], int, float) -> Tuple[om.MVector, om.MQuaternion]
         if self.mode in ("linear", "spline"):
             return self.compute_interpolated_output(source_samples, sample_index)
 
@@ -433,6 +463,7 @@ class DeltaAnimationLayer(object):
         return self.compute_subtract(source_samples[sample_index], reference)
 
     def compute_interpolated_output(self, source_samples, sample_index):
+        # type: (Sequence[Tuple[om.MVector, om.MQuaternion]], int) -> Tuple[om.MVector, om.MQuaternion]
         if len(self.times) > 1:
             ratio = float(sample_index) / float(len(self.times) - 1)
         else:
@@ -450,13 +481,14 @@ class DeltaAnimationLayer(object):
 
 
 
-_delta_anim_layer_dialog = None
+_delta_anim_layer_dialog = None  # type: Optional[Any]
 
 class DeltaAnimLayerDialog(QtWidgets.QDialog):
     """Resizable PySide dialog for creating delta animation layers."""
 
     WINDOW_OBJECT_NAME = "deltaAnimLayerPySide2UI"
     def __init__(self, parent=None):
+        # type: (Optional[Any]) -> None
         super(DeltaAnimLayerDialog, self).__init__(parent)
         self.setObjectName(self.WINDOW_OBJECT_NAME)
         self.setWindowTitle("Delta Animation Layer - OpenMaya API 1.0")
@@ -464,18 +496,18 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.setMinimumSize(420, 440)
         self.resize(560, 520)
 
-        self.mode_combo = None
-        self.reference_layer_combo = None
-        self.source_layer_combo = None
-        self.output_layer_edit = None
-        self.start_spin = None
-        self.end_spin = None
-        self.step_spin = None
-        self.reference_time_spin = None
-        self.use_reference_pose_check = None
-        self.use_seconds_check = None
-        self.replace_output_check = None
-        self.status_label = None
+        self.mode_combo = None  # type: Optional[Any]
+        self.reference_layer_combo = None  # type: Optional[Any]
+        self.source_layer_combo = None  # type: Optional[Any]
+        self.output_layer_edit = None  # type: Optional[Any]
+        self.start_spin = None  # type: Optional[Any]
+        self.end_spin = None  # type: Optional[Any]
+        self.step_spin = None  # type: Optional[Any]
+        self.reference_time_spin = None  # type: Optional[Any]
+        self.use_reference_pose_check = None  # type: Optional[Any]
+        self.use_seconds_check = None  # type: Optional[Any]
+        self.replace_output_check = None  # type: Optional[Any]
+        self.status_label = None  # type: Optional[Any]
 
         self.build_ui()
         self.refresh_layer_menus()
@@ -483,6 +515,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
     @staticmethod
     def maya_main_window():
+        # type: () -> Optional[Any]
         ptr = omui.MQtUtil.mainWindow()
         if ptr is None:
             return None
@@ -490,17 +523,20 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
     @staticmethod
     def list_anim_layers():
+        # type: () -> List[str]
         layers = cmds.ls(type="animLayer") or []
         return ["None"] + layers
 
     @staticmethod
     def selected_layer_name(combo):
+        # type: (Any) -> str
         layer_name = combo.currentText()
         if layer_name == "None":
             return ""
         return layer_name
 
     def build_ui(self):
+        # type: () -> None
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(10)
@@ -585,6 +621,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
     @staticmethod
     def new_time_spin(minimum=-1000000.0, maximum=1000000.0, default_value=0.0):
+        # type: (float, float, float) -> Any
         spin = QtWidgets.QDoubleSpinBox()
         spin.setRange(minimum, maximum)
         spin.setDecimals(4)
@@ -594,6 +631,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         return spin
 
     def load_default_time_range(self):
+        # type: () -> None
         time_unit = om.MTime.uiUnit()
         start = oma.MAnimControl.minTime().asUnits(time_unit)
         end = oma.MAnimControl.maxTime().asUnits(time_unit)
@@ -602,10 +640,12 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.reference_time_spin.setValue(start)
 
     def refresh_time_range_from_timeline(self):
+        # type: () -> None
         self.load_default_time_range()
         self.status_label.setText("Time range refreshed from current timeline.")
 
     def refresh_layer_menus(self):
+        # type: () -> None
         layers = self.list_anim_layers()
         old_reference = self.reference_layer_combo.currentText()
         old_source = self.source_layer_combo.currentText()
@@ -625,6 +665,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.status_label.setText("Animation layer list refreshed.")
 
     def build_runner(self):
+        # type: () -> DeltaAnimationLayer
         return DeltaAnimationLayer(
             mode=self.mode_combo.currentText(),
             reference_layer=self.selected_layer_name(self.reference_layer_combo),
@@ -640,6 +681,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         )
 
     def run_delta(self):
+        # type: () -> None
         try:
             output_layer = self.build_runner().execute()
             self.status_label.setText("Created delta animation layer: {0}".format(output_layer))
@@ -651,6 +693,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
     @classmethod
     def delete_existing_dialog(cls):
+        # type: () -> None
         global _delta_anim_layer_dialog
 
         if _delta_anim_layer_dialog is not None:
@@ -668,6 +711,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
     @classmethod
     def show_dialog(cls):
+        # type: () -> Any
         global _delta_anim_layer_dialog
 
         cls.delete_existing_dialog()
@@ -679,6 +723,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
 
 def show_delta_anim_layer_ui():
+    # type: () -> Any
     return DeltaAnimLayerDialog.show_dialog()
 
 
