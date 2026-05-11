@@ -39,6 +39,14 @@ def find_layer_curve(cmds, layer: str, node: str, attribute: str) -> str:
     return curves[0]
 
 
+def has_layer_curve(cmds, layer: str, node: str, attribute: str) -> bool:
+    plug = "{0}.{1}".format(node, attribute)
+    curves = cmds.animLayer(layer, query=True, findCurveForPlug=plug)
+    if isinstance(curves, str):
+        curves = [curves]
+    return bool(curves)
+
+
 def evaluate_layer_value(cmds, layer: str, node: str, attribute: str, time: float) -> float:
     curve = find_layer_curve(cmds, layer, node, attribute)
     values = cmds.keyframe(curve, query=True, eval=True, time=(time, time))
@@ -59,6 +67,9 @@ def create_keyed_transform(cmds, name: str) -> str:
         cmds.setKeyframe(node, attribute="translateX", time=time, value=value)
         cmds.setKeyframe(node, attribute="translateY", time=time, value=value * 0.5)
         cmds.setKeyframe(node, attribute="translateZ", time=time, value=-value)
+        cmds.setKeyframe(node, attribute="rotateX", time=time, value=value * 2.0)
+        cmds.setKeyframe(node, attribute="rotateY", time=time, value=-value)
+        cmds.setKeyframe(node, attribute="rotateZ", time=time, value=value * 0.25)
     return node
 
 
@@ -150,6 +161,37 @@ def validate_source_and_reference_layer_nodes(cmds, dal) -> None:
     evaluate_layer_value(cmds, output_layer, source_node, "translateX", 1.0)
 
 
+def validate_ignored_channel_groups(cmds, dal) -> None:
+    node = create_keyed_transform(cmds, "deltaPyRegression_ignoreChannels")
+    reference_layer = create_reference_layer(cmds, node, "deltaPyRegression_ignoreChannels_reference")
+
+    translate_output = "deltaPyRegression_ignoreTranslate_output"
+    run_python_tool(dal, "subtract", reference_layer, translate_output, ignore_translate=True)
+    if has_layer_curve(cmds, translate_output, node, "translateX"):
+        raise RuntimeError("ignore_translate should not write translateX.")
+    evaluate_layer_value(cmds, translate_output, node, "rotateX", 1.0)
+
+    rotation_output = "deltaPyRegression_ignoreRotation_output"
+    run_python_tool(dal, "subtract", reference_layer, rotation_output, ignore_rotation=True)
+    evaluate_layer_value(cmds, rotation_output, node, "translateX", 1.0)
+    if has_layer_curve(cmds, rotation_output, node, "rotateX"):
+        raise RuntimeError("ignore_rotation should not write rotateX.")
+
+    try:
+        run_python_tool(
+            dal,
+            "subtract",
+            reference_layer,
+            "deltaPyRegression_ignoreAll_output",
+            ignore_translate=True,
+            ignore_rotation=True,
+        )
+    except RuntimeError:
+        return
+
+    raise RuntimeError("Ignoring translate and rotation together should fail.")
+
+
 def main() -> int:
     args = parse_args()
 
@@ -166,6 +208,7 @@ def main() -> int:
     validate_reference_pose_modes(cmds, dal)
     validate_interpolated_modes(cmds, dal)
     validate_source_and_reference_layer_nodes(cmds, dal)
+    validate_ignored_channel_groups(cmds, dal)
 
     print("DeltaAnimationLayer Python regression validation passed.")
     exit_without_maya_shutdown()

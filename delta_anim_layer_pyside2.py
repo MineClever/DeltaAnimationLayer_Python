@@ -45,9 +45,11 @@ class DeltaAnimationLayer(object):
         reference_time=None,
         use_reference_pose=False,
         use_seconds=False,
-        replace_output=False
+        replace_output=False,
+        ignore_translate=False,
+        ignore_rotation=False
     ):
-        # type: (str, str, str, str, Optional[float], Optional[float], float, Optional[float], bool, bool, bool) -> None
+        # type: (str, str, str, str, Optional[float], Optional[float], float, Optional[float], bool, bool, bool, bool, bool) -> None
         self.mode = self.parse_mode(mode)  # type: str
         self.reference_layer = reference_layer  # type: str
         self.source_layer = source_layer  # type: str
@@ -59,6 +61,8 @@ class DeltaAnimationLayer(object):
         self.use_reference_pose = use_reference_pose  # type: bool
         self.use_seconds = use_seconds  # type: bool
         self.replace_output = replace_output  # type: bool
+        self.ignore_translate = ignore_translate  # type: bool
+        self.ignore_rotation = ignore_rotation  # type: bool
         self.time_unit = None  # type: Optional[int]
         self.times = []  # type: List[float]
         self.paths = []  # type: List[om.MDagPath]
@@ -269,7 +273,10 @@ class DeltaAnimationLayer(object):
     def write_transform_sample(self, path, time_value, sample):
         # type: (om.MDagPath, float, Tuple[om.MVector, om.MQuaternion]) -> None
         node_obj = path.node()
-        plugs = [self.find_plug(node_obj, attr_name) for attr_name in self.TRANSFORM_ATTRS]
+        plugs = dict(
+            (attr_name, self.find_plug(node_obj, attr_name))
+            for attr_name in self.TRANSFORM_ATTRS
+        )
 
         transform_fn = om.MFnTransform(path)
         current_rot = om.MEulerRotation()
@@ -279,17 +286,15 @@ class DeltaAnimationLayer(object):
         euler = rotation.asEulerRotation()
         euler.reorderIt(current_rot.order)
 
-        values = [
-            translation.x,
-            translation.y,
-            translation.z,
-            euler.x,
-            euler.y,
-            euler.z,
-        ]
+        if not self.ignore_translate:
+            self.set_layer_key(plugs["translateX"], time_value, translation.x)
+            self.set_layer_key(plugs["translateY"], time_value, translation.y)
+            self.set_layer_key(plugs["translateZ"], time_value, translation.z)
 
-        for plug, value in zip(plugs, values):
-            self.set_layer_key(plug, time_value, value)
+        if not self.ignore_rotation:
+            self.set_layer_key(plugs["rotateX"], time_value, euler.x)
+            self.set_layer_key(plugs["rotateY"], time_value, euler.y)
+            self.set_layer_key(plugs["rotateZ"], time_value, euler.z)
 
     @staticmethod
     def build_times(start, end, step):
@@ -373,6 +378,8 @@ class DeltaAnimationLayer(object):
         # type: () -> None
         if not self.output_layer:
             raise RuntimeError("Output layer is required.")
+        if self.ignore_translate and self.ignore_rotation:
+            raise RuntimeError("At least one output channel group must be enabled.")
 
         self.paths = self.resolve_node_paths_from_layers()
         self.time_unit = om.MTime.kSeconds if self.use_seconds else om.MTime.uiUnit()
@@ -477,6 +484,8 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.use_reference_pose_check = None  # type: Optional[Any]
         self.use_seconds_check = None  # type: Optional[Any]
         self.replace_output_check = None  # type: Optional[Any]
+        self.ignore_translate_check = None  # type: Optional[Any]
+        self.ignore_rotation_check = None  # type: Optional[Any]
         self.status_label = None  # type: Optional[Any]
 
         self.build_ui()
@@ -552,10 +561,14 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.use_reference_pose_check = QtWidgets.QCheckBox("Use reference pose at Reference Time")
         self.use_seconds_check = QtWidgets.QCheckBox("Use seconds instead of UI time unit")
         self.replace_output_check = QtWidgets.QCheckBox("Replace output layer if exists")
+        self.ignore_translate_check = QtWidgets.QCheckBox("Ignore translate")
+        self.ignore_rotation_check = QtWidgets.QCheckBox("Ignore rotation")
         self.replace_output_check.setChecked(True)
         options_layout.addWidget(self.use_reference_pose_check)
         options_layout.addWidget(self.use_seconds_check)
         options_layout.addWidget(self.replace_output_check)
+        options_layout.addWidget(self.ignore_translate_check)
+        options_layout.addWidget(self.ignore_rotation_check)
         main_layout.addWidget(options_group)
 
         main_layout.addStretch(1)
@@ -634,7 +647,9 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
                 reference_time=self.reference_time_spin.value(),
                 use_reference_pose=self.use_reference_pose_check.isChecked(),
                 use_seconds=self.use_seconds_check.isChecked(),
-                replace_output=self.replace_output_check.isChecked()
+                replace_output=self.replace_output_check.isChecked(),
+                ignore_translate=self.ignore_translate_check.isChecked(),
+                ignore_rotation=self.ignore_rotation_check.isChecked()
             ).execute()
             self.status_label.setText("Created delta animation layer: {0}".format(output_layer))
         except Exception as exc:
