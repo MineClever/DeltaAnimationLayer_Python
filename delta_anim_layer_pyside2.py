@@ -410,16 +410,16 @@ class DeltaAnimationLayer(object):
         return self.compute_subtract(source_samples[sample_index], reference)
 
 
-WINDOW_OBJECT_NAME = "deltaAnimLayerPySide2UI"
-_delta_anim_layer_dialog = None
 
+_delta_anim_layer_dialog = None
 
 class DeltaAnimLayerDialog(QtWidgets.QDialog):
     """Resizable PySide dialog for creating delta animation layers."""
 
+    WINDOW_OBJECT_NAME = "deltaAnimLayerPySide2UI"
     def __init__(self, parent=None):
         super(DeltaAnimLayerDialog, self).__init__(parent)
-        self.setObjectName(WINDOW_OBJECT_NAME)
+        self.setObjectName(self.WINDOW_OBJECT_NAME)
         self.setWindowTitle("Delta Animation Layer - OpenMaya API 1.0")
         self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         self.setMinimumSize(420, 440)
