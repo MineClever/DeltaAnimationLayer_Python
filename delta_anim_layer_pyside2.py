@@ -172,23 +172,20 @@ class DeltaAnimationLayer(object):
     @staticmethod
     def quaternion_inverse(q):
         # type: (om.MQuaternion) -> om.MQuaternion
-        inverse = om.MQuaternion(q.x, q.y, q.z, q.w)
+        inverse = om.MQuaternion(q)
         inverse.invertIt()
         return inverse
 
     @staticmethod
     def quaternion_slerp(q1, q2, weight):
         # type: (om.MQuaternion, om.MQuaternion, float) -> om.MQuaternion
-        try:
-            return om.MQuaternion.slerp(q1, q2, weight)
-        except Exception:
-            x = q1.x * (1.0 - weight) + q2.x * weight
-            y = q1.y * (1.0 - weight) + q2.y * weight
-            z = q1.z * (1.0 - weight) + q2.z * weight
-            w = q1.w * (1.0 - weight) + q2.w * weight
-            q = om.MQuaternion(x, y, z, w)
-            q.normalizeIt()
-            return q
+        x = q1.x * (1.0 - weight) + q2.x * weight
+        y = q1.y * (1.0 - weight) + q2.y * weight
+        z = q1.z * (1.0 - weight) + q2.z * weight
+        w = q1.w * (1.0 - weight) + q2.w * weight
+        q = om.MQuaternion(x, y, z, w)
+        q.normalizeIt()
+        return q
 
     def compute_subtract(self, source, reference):
         # type: (Tuple[om.MVector, om.MQuaternion], Tuple[om.MVector, om.MQuaternion]) -> Tuple[om.MVector, om.MQuaternion]
