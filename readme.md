@@ -2,6 +2,8 @@
 
 Maya Python version of DeltaAnimationLayer. This is a plain Python tool, not a Maya plugin. Load or run the script in Maya, then create the core class directly or open the PySide UI.
 
+The plugin extracts the practical delta / predelta math used by the CSGO into a small independent script.
+
 ## Requirements
 
 - Autodesk Maya 2022 or a compatible Maya version with Python 3
