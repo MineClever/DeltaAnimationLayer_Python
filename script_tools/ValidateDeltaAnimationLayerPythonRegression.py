@@ -105,10 +105,10 @@ def validate_reference_pose_modes(cmds, dal) -> None:
 
 def validate_interpolated_modes(cmds, dal) -> None:
     cases = (
-        ("linearDelta", -0.3333333333),
-        ("splineDelta", -0.9259259259),
+        ("linearDelta", -1.6666666667),
+        ("splineDelta", -1.0740740741),
     )
-    for mode, expected_at_time_3 in cases:
+    for mode, expected_at_sample_1 in cases:
         node = create_keyed_transform(cmds, "deltaPyRegression_{0}".format(mode))
         reference_layer = create_reference_layer(cmds, node, "deltaPyRegression_{0}_reference".format(mode))
         layer = "deltaPyRegression_{0}_layer".format(mode)
@@ -116,18 +116,18 @@ def validate_interpolated_modes(cmds, dal) -> None:
         evaluate_layer_value(cmds, layer, node, "translateX", 1.0)
 
         runner = dal.DeltaAnimationLayer(mode=mode)
-        runner.times = [1.0, 3.0, 4.0]
         identity_rotation = dal.om.MQuaternion()
         source_samples = [
             (dal.om.MVector(1.0, 0.0, 0.0), identity_rotation),
+            (dal.om.MVector(2.0, 0.0, 0.0), identity_rotation),
             (dal.om.MVector(6.0, 0.0, 0.0), identity_rotation),
             (dal.om.MVector(9.0, 0.0, 0.0), identity_rotation),
         ]
-        output = runner.compute_interpolated_output(source_samples, 1, 3.0)
+        output = runner.compute_interpolated_output(source_samples, 1)
         assert_close(
             output[0].x,
-            expected_at_time_3,
-            "{0} translateX at uneven sample time".format(mode),
+            expected_at_sample_1,
+            "{0} translateX at sample-index interpolation".format(mode),
         )
 
 
