@@ -221,6 +221,23 @@ class DeltaAnimationLayer(object):
         except Exception:
             pass
 
+    def disable_source_layer_animation(self):
+        if self.is_empty_layer(self.source_layer):
+            return False
+
+        if not cmds.objExists(self.source_layer):
+            raise RuntimeError("Source Layer does not exist: {0}".format(self.source_layer))
+
+        try:
+            cmds.animLayer(self.source_layer, edit=True, mute=True)
+        except Exception:
+            mute_attr = self.source_layer + ".mute"
+            if not cmds.objExists(mute_attr):
+                raise
+            cmds.setAttr(mute_attr, True)
+
+        return True
+
     def format_time_arg(self, time_value):
         time_arg = str(time_value)
         if self.time_unit == om.MTime.kSeconds:
@@ -287,13 +304,22 @@ class DeltaAnimationLayer(object):
             times.append(end)
         return times
 
-    def resolve_node_paths_from_reference_layer(self):
-        if self.is_empty_layer(self.reference_layer):
-            raise RuntimeError("Reference Layer is required to resolve input transform nodes.")
+    def query_layer_attributes(self, layer_name):
+        if self.is_empty_layer(layer_name):
+            return []
 
-        attributes = cmds.animLayer(self.reference_layer, query=True, attribute=True) or []
+        if not cmds.objExists(layer_name):
+            raise RuntimeError("Animation Layer does not exist: {0}".format(layer_name))
+
+        attributes = cmds.animLayer(layer_name, query=True, attribute=True) or []
         if isinstance(attributes, str):
             attributes = [attributes]
+        return attributes
+
+    def resolve_node_paths_from_layer_attributes(self, layer_names):
+        attributes = []
+        for layer_name in layer_names:
+            attributes.extend(self.query_layer_attributes(layer_name))
 
         paths = []
         seen_paths = set()
@@ -314,12 +340,26 @@ class DeltaAnimationLayer(object):
                     paths.append(path)
                     seen_paths.add(full_path)
 
+        return paths
+
+    def resolve_node_paths_from_layers(self):
+        if self.is_empty_layer(self.reference_layer):
+            raise RuntimeError("Reference Layer is required to resolve input transform nodes.")
+
+        paths = self.resolve_node_paths_from_layer_attributes((
+            self.reference_layer,
+            self.source_layer,
+        ))
+
         if not paths:
-            raise RuntimeError("Reference Layer must contain one or more transform attributes.")
+            raise RuntimeError(
+                "Reference Layer or Source Layer must contain one or more transform attributes."
+            )
         return paths
 
     def execute(self):
         self.prepare()
+        self.disable_source_layer_animation()
         self.ensure_animation_layer()
 
         for path in self.paths:
@@ -336,7 +376,7 @@ class DeltaAnimationLayer(object):
         if not self.output_layer:
             raise RuntimeError("Output layer is required.")
 
-        self.paths = self.resolve_node_paths_from_reference_layer()
+        self.paths = self.resolve_node_paths_from_layers()
         self.time_unit = om.MTime.kSeconds if self.use_seconds else om.MTime.uiUnit()
 
         if self.start_time is None:
@@ -466,7 +506,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         main_layout.setSpacing(10)
 
         intro = QtWidgets.QLabel(
-            "Generate a delta animation layer for transform attributes registered on the Reference Layer."
+            "Generate a delta animation layer for transform attributes registered on the Reference Layer or Source Layer."
         )
         intro.setWordWrap(True)
         main_layout.addWidget(intro)
@@ -618,7 +658,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
                 widget.deleteLater()
 
     @classmethod
-    def show(cls):
+    def show_dialog(cls):
         global _delta_anim_layer_dialog
 
         cls.delete_existing_dialog()
@@ -630,7 +670,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
 
 def show_delta_anim_layer_ui():
-    return DeltaAnimLayerDialog.show()
+    return DeltaAnimLayerDialog.show_dialog()
 
 
 if __name__ == "__main__":

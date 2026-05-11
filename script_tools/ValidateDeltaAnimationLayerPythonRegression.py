@@ -103,6 +103,25 @@ def validate_interpolated_modes(cmds, dal) -> None:
         evaluate_layer_value(cmds, layer, node, "translateX", 1.0)
 
 
+def validate_source_and_reference_layer_nodes(cmds, dal) -> None:
+    reference_node = create_keyed_transform(cmds, "deltaPyRegression_referenceOnlyNode")
+    source_node = create_keyed_transform(cmds, "deltaPyRegression_sourceOnlyNode")
+    reference_layer = create_reference_layer(cmds, reference_node, "deltaPyRegression_combined_reference")
+    source_layer = create_reference_layer(cmds, source_node, "deltaPyRegression_combined_source")
+    output_layer = "deltaPyRegression_combined_output"
+
+    run_python_tool(
+        dal,
+        "subtract",
+        reference_layer,
+        output_layer,
+        source_layer=source_layer,
+    )
+
+    evaluate_layer_value(cmds, output_layer, reference_node, "translateX", 1.0)
+    evaluate_layer_value(cmds, output_layer, source_node, "translateX", 1.0)
+
+
 def main() -> int:
     args = parse_args()
 
@@ -118,6 +137,7 @@ def main() -> int:
     cmds.file(new=True, force=True)
     validate_reference_pose_modes(cmds, dal)
     validate_interpolated_modes(cmds, dal)
+    validate_source_and_reference_layer_nodes(cmds, dal)
 
     print("DeltaAnimationLayer Python regression validation passed.")
     exit_without_maya_shutdown()

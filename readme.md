@@ -52,7 +52,7 @@ The Python version separates the core implementation and UI:
 The behavior follows the C++ and C# implementations:
 
 - `reference_layer` is required.
-- Input transform nodes are resolved from transform attributes registered on `reference_layer`.
+- Input transform nodes are resolved from transform attributes registered on `reference_layer` and non-empty `source_layer`.
 - Selection is not used as an input fallback.
 - `source_layer` may be empty, which samples the current evaluated scene value.
 - Supported modes are `subtract`, `presubtract`, `linearDelta`, and `splineDelta`, with aliases matching the C++ and C# versions.
