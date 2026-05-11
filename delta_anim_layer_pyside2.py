@@ -613,7 +613,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
             _delta_anim_layer_dialog = None
 
         for widget in QtWidgets.QApplication.topLevelWidgets():
-            if widget.objectName() == WINDOW_OBJECT_NAME:
+            if widget.objectName() == cls.WINDOW_OBJECT_NAME:
                 widget.close()
                 widget.deleteLater()
 
