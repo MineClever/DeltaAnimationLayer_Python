@@ -114,11 +114,15 @@ class ReferenceGroundOriginProjector(object):
         up_axis = self.get_maya_up_axis_vector()
         up_axis.normalize()
 
-        transform_matrix = om.MTransformationMatrix(matrix)
-        rotation = transform_matrix.rotation()
-        local_basis = [om.MVector(1.0, 0.0, 0.0), om.MVector(0.0, 1.0, 0.0), om.MVector(0.0, 0.0, 1.0)]
         forward_index = 2 if up_index != 2 else 0
-        forward = local_basis[forward_index].rotateBy(rotation)
+        rows = [
+            om.MVector(matrix(0, 0), matrix(0, 1), matrix(0, 2)),
+            om.MVector(matrix(1, 0), matrix(1, 1), matrix(1, 2)),
+            om.MVector(matrix(2, 0), matrix(2, 1), matrix(2, 2)),
+        ]
+        row_lengths = [max(row.length(), 1.0e-8) for row in rows]
+
+        forward = om.MVector(rows[forward_index])
         forward = self._project_point_to_ground(forward, up_axis)
 
         result = om.MMatrix(matrix)
@@ -126,20 +130,24 @@ class ReferenceGroundOriginProjector(object):
             return result
 
         forward.normalize()
-        side = up_axis ^ forward
-        if side.length() < 1.0e-8:
-            return result
-        side.normalize()
-
         axes = [om.MVector(), om.MVector(), om.MVector()]
         axes[up_index] = up_axis
         axes[forward_index] = forward
         remaining_index = 3 - up_index - forward_index
-        axes[remaining_index] = side if remaining_index == 0 else forward ^ up_axis
+
+        if remaining_index == 0:
+            axes[remaining_index] = axes[1] ^ axes[2]
+        elif remaining_index == 1:
+            axes[remaining_index] = axes[2] ^ axes[0]
+        else:
+            axes[remaining_index] = axes[0] ^ axes[1]
+
+        if axes[remaining_index].length() < 1.0e-8:
+            return result
         axes[remaining_index].normalize()
 
         for row, axis in enumerate(axes):
-            self._set_matrix_row_vector(result, row, axis)
+            self._set_matrix_row_vector(result, row, axis * row_lengths[row])
         return result
 
     @staticmethod
@@ -331,7 +339,7 @@ class ReferenceGroundOriginProjectDialog(QtWidgets.QDialog):
         layout = QtWidgets.QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
-        button = QtWidgets.QPushButton("Timeline")
+        button = QtWidgets.QPushButton("Get")
         button.clicked.connect(command_callback)
         layout.addWidget(spin_field, 1)
         layout.addWidget(button)
