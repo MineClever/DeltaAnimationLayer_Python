@@ -523,15 +523,16 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         ref_row = QtWidgets.QHBoxLayout()
         self.reference_layer_combo = QtWidgets.QComboBox()
         self.reference_layer_combo.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        refresh_button = QtWidgets.QPushButton("Refresh")
-        refresh_button.clicked.connect(self.refresh_layer_menus)
         ref_row.addWidget(self.reference_layer_combo, 1)
-        ref_row.addWidget(refresh_button)
         settings_layout.addRow("Reference Layer", ref_row)
 
         self.source_layer_combo = QtWidgets.QComboBox()
         settings_layout.addRow("Source Layer", self.source_layer_combo)
-
+        
+        refresh_button = QtWidgets.QPushButton("Refresh layers")
+        refresh_button.clicked.connect(self.refresh_layer_menus)
+        settings_layout.addWidget(refresh_button)
+        
         self.output_layer_edit = QtWidgets.QLineEdit("DeltaLayer")
         settings_layout.addRow("Output Layer", self.output_layer_edit)
         main_layout.addWidget(settings_group)
@@ -544,9 +545,12 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.end_spin = self.new_time_spin()
         self.step_spin = self.new_time_spin(minimum=0.001, default_value=1.0)
         self.reference_time_spin = self.new_time_spin()
+        refresh_time_button = QtWidgets.QPushButton("Refresh from Timeline")
+        refresh_time_button.clicked.connect(self.refresh_time_range_from_timeline)
 
         time_layout.addRow("Start Time", self.start_spin)
         time_layout.addRow("End Time", self.end_spin)
+        time_layout.addRow("Timeline", refresh_time_button)
         time_layout.addRow("Time Step", self.step_spin)
         time_layout.addRow("Reference Time", self.reference_time_spin)
         main_layout.addWidget(time_group)
@@ -556,6 +560,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.use_reference_pose_check = QtWidgets.QCheckBox("Use reference pose at Reference Time")
         self.use_seconds_check = QtWidgets.QCheckBox("Use seconds instead of UI time unit")
         self.replace_output_check = QtWidgets.QCheckBox("Replace output layer if exists")
+        self.replace_output_check.setChecked(True)
         options_layout.addWidget(self.use_reference_pose_check)
         options_layout.addWidget(self.use_seconds_check)
         options_layout.addWidget(self.replace_output_check)
@@ -595,6 +600,10 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.start_spin.setValue(start)
         self.end_spin.setValue(end)
         self.reference_time_spin.setValue(start)
+
+    def refresh_time_range_from_timeline(self):
+        self.load_default_time_range()
+        self.status_label.setText("Time range refreshed from current timeline.")
 
     def refresh_layer_menus(self):
         layers = self.list_anim_layers()
