@@ -418,7 +418,7 @@ class DeltaAnimationLayer(object):
     def compute_output_sample(self, path, source_samples, reference_pose, sample_index, time_value):
         # type: (om.MDagPath, Sequence[Tuple[om.MVector, om.MQuaternion]], Optional[Tuple[om.MVector, om.MQuaternion]], int, float) -> Tuple[om.MVector, om.MQuaternion]
         if self.mode in ("linear", "spline"):
-            return self.compute_interpolated_output(source_samples, sample_index)
+            return self.compute_interpolated_output(source_samples, sample_index, time_value)
 
         reference = reference_pose
         if not self.use_reference_pose:
@@ -432,10 +432,10 @@ class DeltaAnimationLayer(object):
             return self.compute_pre_subtract(source_samples[sample_index], reference)
         return self.compute_subtract(source_samples[sample_index], reference)
 
-    def compute_interpolated_output(self, source_samples, sample_index):
-        # type: (Sequence[Tuple[om.MVector, om.MQuaternion]], int) -> Tuple[om.MVector, om.MQuaternion]
-        if len(self.times) > 1:
-            ratio = float(sample_index) / float(len(self.times) - 1)
+    def compute_interpolated_output(self, source_samples, sample_index, time_value):
+        # type: (Sequence[Tuple[om.MVector, om.MQuaternion]], int, float) -> Tuple[om.MVector, om.MQuaternion]
+        if len(self.times) > 1 and abs(self.times[-1] - self.times[0]) > 1.0e-8:
+            ratio = (time_value - self.times[0]) / (self.times[-1] - self.times[0])
         else:
             ratio = 1.0
 
