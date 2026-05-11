@@ -4,7 +4,7 @@
 # show_delta_anim_layer_ui()
 
 import math
-from typing import Any, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 import maya.cmds as cmds
 import maya.OpenMaya as om
@@ -88,24 +88,6 @@ class DeltaAnimationLayer(object):
         return 3.0 * t * t - 2.0 * t * t * t
 
     @staticmethod
-    def get_dag_path(node):
-        # type: (str) -> om.MDagPath
-        selection = om.MSelectionList()
-        selection.add(node)
-        path = om.MDagPath()
-        selection.getDagPath(0, path)
-        return path
-
-    @staticmethod
-    def get_depend_node(node_name):
-        # type: (str) -> om.MObject
-        selection = om.MSelectionList()
-        selection.add(node_name)
-        obj = om.MObject()
-        selection.getDependNode(0, obj)
-        return obj
-
-    @staticmethod
     def find_plug(node_obj, attr_name):
         # type: (om.MObject, str) -> om.MPlug
         node_fn = om.MFnDependencyNode(node_obj)
@@ -139,7 +121,10 @@ class DeltaAnimationLayer(object):
         if not curve_name or not cmds.objExists(curve_name):
             return None
 
-        curve_obj = self.get_depend_node(curve_name)
+        selection = om.MSelectionList()
+        selection.add(curve_name)
+        curve_obj = om.MObject()
+        selection.getDependNode(0, curve_obj)
         if curve_obj.hasFn(om.MFn.kAnimCurve):
             return curve_obj
         return None
@@ -327,55 +312,43 @@ class DeltaAnimationLayer(object):
             times.append(end)
         return times
 
-    def query_layer_attributes(self, layer_name):
-        # type: (str) -> List[str]
-        if self.is_empty_layer(layer_name):
-            return []
-
-        if not cmds.objExists(layer_name):
-            raise RuntimeError("Animation Layer does not exist: {0}".format(layer_name))
-
-        attributes = cmds.animLayer(layer_name, query=True, attribute=True) or []
-        if isinstance(attributes, str):
-            attributes = [attributes]
-        return attributes
-
-    def resolve_node_paths_from_layer_attributes(self, layer_names):
-        # type: (Iterable[str]) -> List[om.MDagPath]
-        attributes = []
-        for layer_name in layer_names:
-            attributes.extend(self.query_layer_attributes(layer_name))
-
-        paths = []
-        seen_paths = set()
-        for plug_name in attributes:
-            if not plug_name or "." not in plug_name:
-                continue
-
-            node_name = plug_name.rsplit(".", 1)[0]
-            matches = cmds.ls(node_name, long=True, type="transform") or []
-            for match in matches:
-                try:
-                    path = self.get_dag_path(match)
-                except Exception:
-                    continue
-
-                full_path = path.fullPathName()
-                if full_path not in seen_paths:
-                    paths.append(path)
-                    seen_paths.add(full_path)
-
-        return paths
-
     def resolve_node_paths_from_layers(self):
         # type: () -> List[om.MDagPath]
         if self.is_empty_layer(self.reference_layer):
             raise RuntimeError("Reference Layer is required to resolve input transform nodes.")
 
-        paths = self.resolve_node_paths_from_layer_attributes((
-            self.reference_layer,
-            self.source_layer,
-        ))
+        paths = []
+        seen_paths = set()
+        for layer_name in (self.reference_layer, self.source_layer):
+            if self.is_empty_layer(layer_name):
+                continue
+
+            if not cmds.objExists(layer_name):
+                raise RuntimeError("Animation Layer does not exist: {0}".format(layer_name))
+
+            attributes = cmds.animLayer(layer_name, query=True, attribute=True) or []
+            if isinstance(attributes, str):
+                attributes = [attributes]
+
+            for plug_name in attributes:
+                if not plug_name or "." not in plug_name:
+                    continue
+
+                node_name = plug_name.rsplit(".", 1)[0]
+                matches = cmds.ls(node_name, long=True, type="transform") or []
+                for match in matches:
+                    try:
+                        selection = om.MSelectionList()
+                        selection.add(match)
+                        path = om.MDagPath()
+                        selection.getDagPath(0, path)
+                    except Exception:
+                        continue
+
+                    full_path = path.fullPathName()
+                    if full_path not in seen_paths:
+                        paths.append(path)
+                        seen_paths.add(full_path)
 
         if not paths:
             raise RuntimeError(
@@ -521,20 +494,6 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
             return None
         return wrapInstance(int(ptr), QtWidgets.QWidget)
 
-    @staticmethod
-    def list_anim_layers():
-        # type: () -> List[str]
-        layers = cmds.ls(type="animLayer") or []
-        return ["None"] + layers
-
-    @staticmethod
-    def selected_layer_name(combo):
-        # type: (Any) -> str
-        layer_name = combo.currentText()
-        if layer_name == "None":
-            return ""
-        return layer_name
-
     def build_ui(self):
         # type: () -> None
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -582,7 +541,7 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.step_spin = self.new_time_spin(minimum=0.001, default_value=1.0)
         self.reference_time_spin = self.new_time_spin()
         refresh_time_button = QtWidgets.QPushButton("Refresh from Timeline")
-        refresh_time_button.clicked.connect(self.refresh_time_range_from_timeline)
+        refresh_time_button.clicked.connect(lambda checked=False: self.load_default_time_range(True))
 
         time_layout.addRow("Start Time", self.start_spin)
         time_layout.addRow("End Time", self.end_spin)
@@ -630,8 +589,8 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         spin.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         return spin
 
-    def load_default_time_range(self):
-        # type: () -> None
+    def load_default_time_range(self, update_status=False):
+        # type: (bool) -> None
         time_unit = om.MTime.uiUnit()
         start = oma.MAnimControl.minTime().asUnits(time_unit)
         end = oma.MAnimControl.maxTime().asUnits(time_unit)
@@ -639,14 +598,12 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
         self.end_spin.setValue(end)
         self.reference_time_spin.setValue(start)
 
-    def refresh_time_range_from_timeline(self):
-        # type: () -> None
-        self.load_default_time_range()
-        self.status_label.setText("Time range refreshed from current timeline.")
+        if update_status:
+            self.status_label.setText("Time range refreshed from current timeline.")
 
     def refresh_layer_menus(self):
         # type: () -> None
-        layers = self.list_anim_layers()
+        layers = ["None"] + (cmds.ls(type="animLayer") or [])
         old_reference = self.reference_layer_combo.currentText()
         old_source = self.source_layer_combo.currentText()
 
@@ -664,26 +621,24 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
 
         self.status_label.setText("Animation layer list refreshed.")
 
-    def build_runner(self):
-        # type: () -> DeltaAnimationLayer
-        return DeltaAnimationLayer(
-            mode=self.mode_combo.currentText(),
-            reference_layer=self.selected_layer_name(self.reference_layer_combo),
-            source_layer=self.selected_layer_name(self.source_layer_combo),
-            output_layer=self.output_layer_edit.text().strip(),
-            start_time=self.start_spin.value(),
-            end_time=self.end_spin.value(),
-            time_step=self.step_spin.value(),
-            reference_time=self.reference_time_spin.value(),
-            use_reference_pose=self.use_reference_pose_check.isChecked(),
-            use_seconds=self.use_seconds_check.isChecked(),
-            replace_output=self.replace_output_check.isChecked()
-        )
-
     def run_delta(self):
         # type: () -> None
         try:
-            output_layer = self.build_runner().execute()
+            reference_layer = self.reference_layer_combo.currentText()
+            source_layer = self.source_layer_combo.currentText()
+            output_layer = DeltaAnimationLayer(
+                mode=self.mode_combo.currentText(),
+                reference_layer="" if reference_layer == "None" else reference_layer,
+                source_layer="" if source_layer == "None" else source_layer,
+                output_layer=self.output_layer_edit.text().strip(),
+                start_time=self.start_spin.value(),
+                end_time=self.end_spin.value(),
+                time_step=self.step_spin.value(),
+                reference_time=self.reference_time_spin.value(),
+                use_reference_pose=self.use_reference_pose_check.isChecked(),
+                use_seconds=self.use_seconds_check.isChecked(),
+                replace_output=self.replace_output_check.isChecked()
+            ).execute()
             self.status_label.setText("Created delta animation layer: {0}".format(output_layer))
         except Exception as exc:
             message = str(exc)
@@ -691,40 +646,28 @@ class DeltaAnimLayerDialog(QtWidgets.QDialog):
             cmds.warning(message)
             QtWidgets.QMessageBox.critical(self, "Delta Animation Layer Error", message)
 
-    @classmethod
-    def delete_existing_dialog(cls):
-        # type: () -> None
-        global _delta_anim_layer_dialog
-
-        if _delta_anim_layer_dialog is not None:
-            try:
-                _delta_anim_layer_dialog.close()
-                _delta_anim_layer_dialog.deleteLater()
-            except RuntimeError:
-                pass
-            _delta_anim_layer_dialog = None
-
-        for widget in QtWidgets.QApplication.topLevelWidgets():
-            if widget.objectName() == cls.WINDOW_OBJECT_NAME:
-                widget.close()
-                widget.deleteLater()
-
-    @classmethod
-    def show_dialog(cls):
-        # type: () -> Any
-        global _delta_anim_layer_dialog
-
-        cls.delete_existing_dialog()
-        _delta_anim_layer_dialog = cls(parent=cls.maya_main_window())
-        _delta_anim_layer_dialog.show()
-        _delta_anim_layer_dialog.raise_()
-        _delta_anim_layer_dialog.activateWindow()
-        return _delta_anim_layer_dialog
-
-
 def show_delta_anim_layer_ui():
     # type: () -> Any
-    return DeltaAnimLayerDialog.show_dialog()
+    global _delta_anim_layer_dialog
+
+    if _delta_anim_layer_dialog is not None:
+        try:
+            _delta_anim_layer_dialog.close()
+            _delta_anim_layer_dialog.deleteLater()
+        except RuntimeError:
+            pass
+        _delta_anim_layer_dialog = None
+
+    for widget in QtWidgets.QApplication.topLevelWidgets():
+        if widget.objectName() == DeltaAnimLayerDialog.WINDOW_OBJECT_NAME:
+            widget.close()
+            widget.deleteLater()
+
+    _delta_anim_layer_dialog = DeltaAnimLayerDialog(parent=DeltaAnimLayerDialog.maya_main_window())
+    _delta_anim_layer_dialog.show()
+    _delta_anim_layer_dialog.raise_()
+    _delta_anim_layer_dialog.activateWindow()
+    return _delta_anim_layer_dialog
 
 
 if __name__ == "__main__":
