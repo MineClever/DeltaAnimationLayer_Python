@@ -5,7 +5,6 @@
 
 import math
 import maya.cmds as cmds
-import maya.mel as mel
 import maya.OpenMaya as om
 import maya.OpenMayaAnim as oma
 import maya.OpenMayaUI as omui
@@ -113,12 +112,12 @@ class DeltaAnimationLayer(object):
         if self.is_empty_layer(layer_name) or plug.isNull():
             return None
 
-        command = 'animLayer -q -findCurveForPlug "{0}" "{1}"'.format(
-            plug.name(),
-            layer_name
-        )
         try:
-            result = mel.eval(command)
+            result = cmds.animLayer(
+                layer_name,
+                query=True,
+                findCurveForPlug=plug.name()
+            )
         except Exception:
             return None
 
